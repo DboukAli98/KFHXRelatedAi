@@ -12,12 +12,11 @@ from pathlib import Path
 app = FastAPI()
 
 # Defining the project directory and source data path
-project_dir = Path("C:/Users/adbou/source/repos/KFHXRelatedAi/")
-source_data_dir = project_dir / "Api"
+project_dir = Path("/app")
+source_data_dir = project_dir
 
 # Loading the model and data
 model = joblib.load(source_data_dir / 'als-model.joblib')
-
 
 if hasattr(model, 'item_factors'):
     item_factors = model.item_factors
