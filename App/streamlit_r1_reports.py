@@ -81,22 +81,25 @@ def display_user_profile(user_id):
     most_common_season = season_mapping.get(user_data['most_common_season'], "Unknown")
 
     # Creating 3x3 grid for displaying the metrics
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3  = st.columns(3)
     
     with col1:
         st.metric(label="Total Transactions", value=user_data['total_transactions'])
         st.metric(label="Average Points Rewarded", value=f"{user_data['avg_points_rewarded']:.2f}")
         st.metric(label="Most Active Day", value=most_active_day)
-    
+        st.metric(label="RFM Group" , value=user_data["RFM_Segment"])
     with col2:
         st.metric(label="Total Amount Spent (KWD)", value=f"{user_data['total_amount_spent']:.2f}")
         st.metric(label="Average Amount Spent (KWD)", value=f"{user_data['avg_amount_spent']:.2f}")
         st.metric(label="Most Active Month", value=most_active_month)
-    
+        st.metric(label="RFM Score",value=user_data["RFM_Score"])
+        
+        
     with col3:
         st.metric(label="Recency (Days since last transaction)", value=user_data['recency'])
         st.metric(label="Most Common Season", value=most_common_season)
-        st.empty()  # To maintain the 3x3 layout
+        st.empty()
+        
 
 def plot_frequent_mcc(user_id):
     user_data = user_profiles[user_profiles['FK_BusinessUserId'] == user_id]
