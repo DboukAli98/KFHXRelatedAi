@@ -190,6 +190,45 @@ def plot_user_interest_score_by_mcc(user_id):
     )
     st.plotly_chart(fig)
 
+def plot_top_mcc_by_segment(rfm_segment):
+    user_profiles.columns = user_profiles.columns.astype(str)
+
+    mcc_mapping['MCC'] = mcc_mapping['MCC'].astype(str)
+
+    mcc_columns = [col for col in user_profiles.columns if col.startswith('total_amount_mcc_')]
+
+
+    segment_data = user_profiles[user_profiles['RFM_Segment'] == rfm_segment]
+    mcc_amounts = segment_data[mcc_columns].sum(axis=0)
+    
+    # Filter out zero values to keep only the MCCs with spending
+    mcc_amounts = mcc_amounts[mcc_amounts > 0]
+    
+    # Convert the index to string to facilitate merging with MCC mapping
+    mcc_amounts.index = mcc_amounts.index.str.replace('total_amount_mcc_', '').astype(str)
+    
+    # Convert the Series to a DataFrame
+    mcc_amounts = mcc_amounts.reset_index()
+    mcc_amounts.columns = ['MCC', 'Total_Amount']
+    
+    # Merge the MCC amounts with the MCC mapping data
+    mcc_amounts = mcc_amounts.merge(mcc_mapping, on='MCC', how='left')
+    
+    # Create a label combining MCC and its description
+    mcc_amounts['Label'] = mcc_amounts['MCC'] + ' - ' + mcc_amounts['Detailed MCC']
+    
+    # Create the pie chart using Plotly
+    fig = px.pie(
+        values=mcc_amounts['Total_Amount'], 
+        names=mcc_amounts['Label'], 
+        title=f'Top MCCs by Total Amount for RFM Segment: {rfm_segment}'
+    )
+    fig.update_layout(
+        showlegend=True,
+        width=1000,
+        height=500
+    )
+    st.plotly_chart(fig)
 
 # Streamlit app
 st.title('User Profiles Analysis')
@@ -214,4 +253,10 @@ plot_top_mcc_by_amount(user_id)
 
 st.header(f'User Interest Score by MCC for User ID: {user_id}')
 plot_user_interest_score_by_mcc(user_id)
+
+rfm_segment = st.selectbox('Select RFM Segment', user_profiles['RFM_Segment'].unique())
+
+# Display pie chart for top MCC by amount for the selected RFM segment
+st.header(f'Top MCCs by Amount for RFM Segment: {rfm_segment}')
+plot_top_mcc_by_segment(rfm_segment)
 
