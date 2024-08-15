@@ -9,6 +9,8 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 
-COPY . /app
+COPY . .
 
-CMD ["uvicorn", "Redemption_Model:app", "--host", "0.0.0.0", "--port", "80"]
+EXPOSE 8000
+
+CMD ["uvicorn", "RedeemXRewardModel:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -18,9 +18,8 @@ from typing import List, Optional
 app = FastAPI()
 
 # Setting the working directory to the root of the project
-current_dir = Path(__file__).parent
-base_dir = current_dir.parent
-data_dir = current_dir / "Data"
+base_dir = Path("/app")
+data_dir = base_dir / "Data"
 
 
 import pandas as pd
@@ -28,7 +27,7 @@ import numpy as np
 from collections import defaultdict
 pd.set_option('display.max_columns', None)
 
-model = joblib.load(current_dir / 'redemptionxrewardals_model.joblib')
+model = joblib.load(base_dir / 'redemptionxrewardals_model.joblib')
 
 print(f"model {model} loaded")
 if hasattr(model, 'item_factors'):
@@ -40,7 +39,7 @@ else:
 
 user_profiles = pd.read_excel(data_dir / "User_Profiles_Reports.xlsx")
 
-with open(f"{current_dir}/redemption_user_item_matrix.pkl", 'rb') as file:
+with open(f"{base_dir}/redemption_user_item_matrix.pkl", 'rb') as file:
     user_item_matrix = pickle.load(file)
 
 
@@ -62,7 +61,7 @@ new_user_transaction = new_user_transaction.drop(columns=['ContentId'])
 mcc_mapping = pd.read_excel(data_dir / "MCC_Details.xlsx")
 mcc_embeddings = pd.read_csv(data_dir / "Unique_MCCs_Embeddings.csv")
 
-sparse_user_item = load_npz(current_dir / 'user_item_matrix.npz')
+sparse_user_item = load_npz(base_dir / 'user_item_matrix.npz')
 
 # Convert MCC in mcc_mapping to string
 mcc_mapping['MCC'] = mcc_mapping['MCC'].astype(str)
