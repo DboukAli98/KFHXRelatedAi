@@ -5,16 +5,18 @@ import os
 from pathlib import Path
 
 # Setting the working directory to the root of the project
-project_dir = Path("C:/Users/adbou/source/repos/KFHXRelatedAi/")
-os.chdir(project_dir)
+# project_dir = Path("C:/Users/adbou/source/repos/KFHXRelatedAi/")
+# os.chdir(project_dir)
+current_dir = Path(__file__).parent
+base_dir = current_dir.parent
+data_dir = base_dir / "DataForStreamlit"
 
-from Configs.GeneralPaths import SOURCEDATA
 
 # Load the user profiles data
-user_profiles = pd.read_excel(Path(SOURCEDATA / "User_Profiles_Reports.xlsx"))
+user_profiles = pd.read_excel(data_dir / "User_Profiles_Reports.xlsx")
 
 # Load MCC mapping data
-mcc_mapping = pd.read_excel(Path(SOURCEDATA / "MCC_Details.xlsx"))
+mcc_mapping = pd.read_excel(data_dir / "MCC_Details.xlsx")
 
 # Convert MCC in mcc_mapping to string
 mcc_mapping['MCC'] = mcc_mapping['MCC'].astype(str)
