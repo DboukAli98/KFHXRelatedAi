@@ -5,8 +5,7 @@ import os
 from pathlib import Path
 
 # Setting the working directory to the root of the project
-# project_dir = Path("C:/Users/adbou/source/repos/KFHXRelatedAi/")
-# os.chdir(project_dir)
+
 current_dir = Path(__file__).parent
 base_dir = current_dir.parent
 data_dir = base_dir / "DataForStreamlit"
