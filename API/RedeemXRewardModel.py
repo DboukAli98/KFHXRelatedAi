@@ -29,7 +29,7 @@ pd.set_option('display.max_columns', None)
 
 model = joblib.load(base_dir / 'redemptionxrewardals_model.joblib')
 
-print(f"model {model} loaded")
+
 if hasattr(model, 'item_factors'):
     item_factors = model.item_factors
     if item_factors is None or item_factors.shape[0] == 0:
@@ -66,6 +66,7 @@ sparse_user_item = load_npz(base_dir / 'user_item_matrix.npz')
 # Convert MCC in mcc_mapping to string
 mcc_mapping['MCC'] = mcc_mapping['MCC'].astype(str)
 
+print("all data loaded")
 def is_numeric_column(col_name):
     try:
         int(col_name)

@@ -11,11 +11,16 @@ base_dir = current_dir.parent
 data_dir = base_dir / "DataForStreamlit"
 
 
-# Load the user profiles data
-user_profiles = pd.read_excel(data_dir / "User_Profiles_Reports.xlsx")
+@st.cache_data
+def load_user_profiles():
+    return pd.read_excel(data_dir / "User_Profiles_Reports.xlsx")
 
-# Load MCC mapping data
-mcc_mapping = pd.read_excel(data_dir / "MCC_Details.xlsx")
+@st.cache_data
+def load_mcc_mapping():
+    return pd.read_excel(data_dir / "MCC_Details.xlsx")
+
+user_profiles = load_user_profiles()
+mcc_mapping = load_mcc_mapping()
 
 # Convert MCC in mcc_mapping to string
 mcc_mapping['MCC'] = mcc_mapping['MCC'].astype(str)
