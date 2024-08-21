@@ -371,31 +371,43 @@ async def recommend(request: RecommendationRequest):
     user_in_profiles = user_id in user_profiles['FK_BusinessUserId'].values
 
     if user_in_item_matrix and user_in_profiles:
+        print("Hybrid Recommendation")
         # Calling hybrid_recommendation_system if user_id is in both
-        hybrid_recommended_deals , spender_category = hybrid_recommendation_system(user_id, model, user_item_matrix, deals_embeddings, deals_data, user_profiles, n_recommendations)
-    
+        hybrid_recommended_deals, spender_category = hybrid_recommendation_system(
+            user_id, model, user_item_matrix, deals_embeddings, deals_data, user_profiles, n_recommendations
+        )
+        recommended_deals = hybrid_recommended_deals
+
     elif user_in_item_matrix:
+        print("Collaborative Filtering Only")
         # Only call collaborative_filtering_recommendations if the user is in the user_item_matrix
-        hybrid_recommended_deals = collaborative_filtering_recommendations(user_id, user_item_matrix, model, deals_embeddings, deals_data, n_recommendations)
-    
+        recommended_deals = collaborative_filtering_recommendations(
+            user_id, user_item_matrix, model, deals_embeddings, deals_data, n_recommendations
+        )
+        spender_category = None  # Not applicable in CF-only mode
+
     elif user_in_profiles:
+        print("Content-Based Filtering Only")
         # Only call recommend_based_on_profiles if the user is in the user_profiles
-        hybrid_recommended_deals = recommend_based_on_profiles(user_id, deals_embeddings, deals_data, user_profiles, n_similar_items=n_recommendations)
-    
+        cb_recommendations, cb_scores, spender_category = recommend_based_on_profiles(
+            user_id, deals_embeddings, deals_data, user_profiles, n_similar_items=n_recommendations
+        )
+        recommended_deals = list(zip(cb_recommendations, cb_scores))
+
     else:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
-    
+
     # Build the response
     deals_list = [
-            {
-                'ContentId': content_id,
-                'Score': score,
-                'DealName': deals_data.loc[deals_data['ContentId'] == content_id, 'Title'].values[0],
-                'Category': deals_data.loc[deals_data['ContentId'] == content_id, 'Categories'].values[0],
-                'DealType': deals_data.loc[deals_data['ContentId'] == content_id, 'Deal Type'].values[0],
-                'Points': deals_data.loc[deals_data['ContentId'] == content_id, 'Points'].values[0],
-            }
-            for content_id, score in hybrid_recommended_deals
+        {
+            'ContentId': content_id,
+            'Score': score,
+            'DealName': deals_data.loc[deals_data['ContentId'] == content_id, 'Title'].values[0],
+            'Category': deals_data.loc[deals_data['ContentId'] == content_id, 'Categories'].values[0],
+            'DealType': deals_data.loc[deals_data['ContentId'] == content_id, 'Deal Type'].values[0],
+            'Points': deals_data.loc[deals_data['ContentId'] == content_id, 'Points'].values[0],
+        }
+        for content_id, score in recommended_deals
     ]
 
     return FullRecommendationResponse(
