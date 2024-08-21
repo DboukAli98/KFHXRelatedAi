@@ -37,8 +37,15 @@ if hasattr(model, 'item_factors'):
 else:
     raise ValueError("Model does not have item_factors attribute.")
 
-user_profiles = pd.read_excel(data_dir / "User_Profiles_Reports.xlsx")
 
+def load_user_profiles(cache_path):
+    # Load the cached data if it exists
+    user_profiles = joblib.load(cache_path)
+
+    return user_profiles
+
+
+user_profiles = load_user_profiles(data_dir / "cached_user_profiles.pkl")
 with open(f"{base_dir}/redemption_user_item_matrix.pkl", 'rb') as file:
     user_item_matrix = pickle.load(file)
 
@@ -214,12 +221,12 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
             'Score': similar_item_scores,
             'Category': categories
         })
-        return recommendations_df
+        return recommendations_df , spender_category
     else:    
         similar_item_ids = [item for item, score in final_recommendations]
         similar_item_scores = [score for item, score in final_recommendations]
 
-    return similar_item_ids, similar_item_scores
+    return similar_item_ids, similar_item_scores , spender_category
 
 
 def collaborative_filtering_recommendations(user_id, user_item_matrix, model, deal_embeddings, deal_data, n_similar_items=10, new_deal_boost=0.0, popular_deal_penalty=0.0, category_penalty=0.0):
@@ -302,7 +309,7 @@ def hybrid_recommendation_system(user_id, model,user_item_matrix, deal_embedding
 
     
     # Generating content-based recommendations (users profiles + deals profiles)
-    cb_recommendations, cb_scores = recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profiles, n_recommendations * 2)
+    cb_recommendations, cb_scores , spender_category = recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profiles, n_recommendations * 2)
     
     # Combining the recommendations
     combined_recommendations = {}
@@ -332,7 +339,7 @@ def hybrid_recommendation_system(user_id, model,user_item_matrix, deal_embedding
         if len(final_recommendations) >= n_recommendations:
             break
     
-    return final_recommendations
+    return final_recommendations , spender_category
 
 
 # FastAPI input model for the request
@@ -340,15 +347,19 @@ class RecommendationRequest(BaseModel):
     user_id: int
     n_recommendations: int = 10
 
-class RecommendationResponse(BaseModel):
+class DealResponse(BaseModel):
     ContentId: int
     Score: float
     DealName: str
     Category: str
     DealType: str
+    Points : int
+class FullRecommendationResponse(BaseModel):
+    UserSpenderCategory: Optional[str]
+    Deals: List[DealResponse]
 
 
-@app.post("/recommend/", response_model=List[RecommendationResponse])
+@app.post("/recommend/", response_model=FullRecommendationResponse)
 async def recommend(request: RecommendationRequest):
     user_id = request.user_id
     n_recommendations = request.n_recommendations
@@ -361,7 +372,7 @@ async def recommend(request: RecommendationRequest):
 
     if user_in_item_matrix and user_in_profiles:
         # Calling hybrid_recommendation_system if user_id is in both
-        hybrid_recommended_deals = hybrid_recommendation_system(user_id, model, user_item_matrix, deals_embeddings, deals_data, user_profiles, n_recommendations)
+        hybrid_recommended_deals , spender_category = hybrid_recommendation_system(user_id, model, user_item_matrix, deals_embeddings, deals_data, user_profiles, n_recommendations)
     
     elif user_in_item_matrix:
         # Only call collaborative_filtering_recommendations if the user is in the user_item_matrix
@@ -372,21 +383,25 @@ async def recommend(request: RecommendationRequest):
         hybrid_recommended_deals = recommend_based_on_profiles(user_id, deals_embeddings, deals_data, user_profiles, n_similar_items=n_recommendations)
     
     else:
-        raise HTTPException(status_code=404, detail=f"User {user_id} not found in either user_item_matrix or user_profiles.")
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
     
     # Build the response
-    recommended_deals_df = pd.DataFrame([
-        {
-            'ContentId': content_id,
-            'Score': score,
-            'DealName': deals_data.loc[deals_data['ContentId'] == content_id, 'Title'].values[0],
-            'Category': deals_data.loc[deals_data['ContentId'] == content_id, 'Categories'].values[0],
-            'DealType': deals_data.loc[deals_data['ContentId'] == content_id, 'Deal Type'].values[0]
-        }
-        for content_id, score in hybrid_recommended_deals
-    ])
+    deals_list = [
+            {
+                'ContentId': content_id,
+                'Score': score,
+                'DealName': deals_data.loc[deals_data['ContentId'] == content_id, 'Title'].values[0],
+                'Category': deals_data.loc[deals_data['ContentId'] == content_id, 'Categories'].values[0],
+                'DealType': deals_data.loc[deals_data['ContentId'] == content_id, 'Deal Type'].values[0],
+                'Points': deals_data.loc[deals_data['ContentId'] == content_id, 'Points'].values[0],
+            }
+            for content_id, score in hybrid_recommended_deals
+    ]
 
-    return recommended_deals_df.to_dict(orient='records')
+    return FullRecommendationResponse(
+        UserSpenderCategory=spender_category,
+        Deals=deals_list
+    )
 
 
 if __name__ == "__main__":
