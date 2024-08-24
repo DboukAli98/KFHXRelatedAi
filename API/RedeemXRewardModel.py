@@ -58,7 +58,7 @@ deals_data = deals_data.drop(columns=['Unnamed: 0.1'])
 
 deals_profiles = pd.read_excel(data_dir / "Updated_Content_Profiles.xlsx")
 
-deals_embeddings = pd.read_csv(data_dir / "Deals_Embeddings_test.csv")
+deals_embeddings = pd.read_csv(data_dir / "Deals_Embeddings.csv")
 deals_embeddings['ada_embedding'] = deals_embeddings['ada_embedding'].apply(ast.literal_eval)
 
 new_user_transaction = new_user_transaction.merge(deals_data[['ContentId', 'Categories','Deal Type']], left_on='FK_ContentId', right_on='ContentId', how='left')
@@ -116,13 +116,40 @@ def convert_to_array(x):
         return np.array(x)
     else:
         raise ValueError(f"Unexpected format: {x}")
-    
+
+def get_top_n_mccs(user_profiles , n=2):
+    #Identifying MCC columns for amount and frequency in user_profiles
+    mcc_amount_columns = [col for col in user_profiles.columns if str(col).startswith('total_amount_mcc_')]
+    mcc_frequency_columns = [col for col in user_profiles.columns if str(col).isdigit()]
+
+    # Normalizing the frequency and amount of MCCs
+    mcc_amount_sums = user_profiles[mcc_amount_columns].sum()
+    mcc_frequency_sums = user_profiles[mcc_frequency_columns].sum()
+
+    normalized_amount = mcc_amount_sums / mcc_amount_sums.sum()
+    normalized_frequency = mcc_frequency_sums / mcc_frequency_sums.sum()
+
+    # Combining the metrics (we multiply with equal weight for simplicity)
+    combined_score = 0.5 * normalized_amount.values + 0.5 * normalized_frequency.values 
+
+    #Rank and selecting the top 10 MCCs
+    combined_score_series = pd.Series(combined_score, index=mcc_frequency_columns)
+    top_10_mccs = combined_score_series.sort_values(ascending=False).head(n)
+
+    top_mccs_df = top_10_mccs.reset_index()
+    top_mccs_df.columns = ['MCC', 'Score']
+    top_mccs_df['MCC'] = top_mccs_df['MCC'].astype(str)
+    top_mccs_with_details = pd.merge(top_mccs_df, mcc_mapping, on='MCC', how='left')
+    top_mccs_with_details
+    return top_mccs_with_details    
+
+top_mccs = get_top_n_mccs(user_profiles , 2)
 
 def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profiles,n_similar_items = 10 , isDf = False):
     # Implementing a recommendation strategy based on user profiles alone
     user_profile = user_profiles[user_profiles['FK_BusinessUserId'] == user_id]
     spender_category = user_profiles.loc[user_profiles['FK_BusinessUserId'] == user_id, 'spender_category'].values[0]
-    # print(f"Spender Category {spender_category}")
+    print(f"Spender Category {spender_category}")
 
     #calculating mcc_scores
     mcc_scores = calculate_user_interest_score(user_id)
@@ -133,6 +160,7 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
     mcc_scores_df.columns = ['MCC', 'Score']
     mcc_scores_df['MCC'] = mcc_scores_df['MCC'].astype(str)  # Convert MCC to string
     mcc_scores_df = mcc_scores_df.merge(mcc_mapping, on='MCC', how='left')
+    mcc_scores_df = mcc_scores_df.sort_values(by='Score', ascending=False)
 
     # Creating labels combining MCC and description
     mcc_scores_df['Label'] = mcc_scores_df['MCC'] + ' - ' + mcc_scores_df['Detailed MCC']
@@ -163,26 +191,25 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
 
     user_mcc_scores = mcc_scores_df.set_index('Detailed MCC')['Score'].to_dict()
 
-    # Filtering deals based on top MCC scores
-    top_mcc_deals = deal_data[deal_data['Categories'].isin(user_mcc_scores.keys())]
-
-    for index, row in top_mcc_deals.iterrows():
+    
+    for index, row in deal_data.iterrows():
         content_id = row['ContentId']
         item_mcc = row['Categories']
         deal_segment = deals_profiles.loc[deals_profiles['FK_ContentId'] == content_id, 'Deal Value Segment'].values[0]
         deal_embedding = np.array(deal_embeddings.loc[deal_embeddings['ContentId'] == content_id, 'ada_embedding'].values[0])
         score = cosine_similarity([user_embedding], [deal_embedding])[0][0]
         
+        if item_mcc in top_mccs["Detailed MCC"].tolist():
+            score *= 0.5
 
         # Adjusting the score based on MCC interest scores of the user
         if item_mcc in user_mcc_scores:
-            score *= (1 + user_mcc_scores[item_mcc])
-        else:
-            score *= 0.8
+            score *= (1.2 + user_mcc_scores[item_mcc])
+        
         
         # Adding weighted adjustment based on spender category
         if spender_category in spender_ranges and deal_segment in spender_ranges[spender_category]:
-            score *= 1.5  
+            score *= 1.5
 
         # recency = 1 / (1 + user_profile['recency'].values[0])
         # score *= (1 + 0.3 * recency)
@@ -205,10 +232,12 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
 
 
     for content_id, score, category in sorted_recommendations:
+        if category_count[category] >= max_per_category:
+            score *= 0.5  # Apply a penalty, could be adjusted dynamically
         if category_count[category] < max_per_category:
             final_recommendations.append((content_id, score))
             category_count[category] += 1
-        
+
         if len(final_recommendations) >= n_similar_items:
             break
     
@@ -221,12 +250,12 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
             'Score': similar_item_scores,
             'Category': categories
         })
-        return recommendations_df , spender_category
+        return recommendations_df
     else:    
         similar_item_ids = [item for item, score in final_recommendations]
         similar_item_scores = [score for item, score in final_recommendations]
 
-    return similar_item_ids, similar_item_scores , spender_category
+    return similar_item_ids, similar_item_scores, spender_category
 
 
 def collaborative_filtering_recommendations(user_id, user_item_matrix, model, deal_embeddings, deal_data, n_similar_items=10, new_deal_boost=0.0, popular_deal_penalty=0.0, category_penalty=0.0):
