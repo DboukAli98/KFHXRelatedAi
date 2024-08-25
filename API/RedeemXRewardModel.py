@@ -150,7 +150,7 @@ def recommend_based_on_profiles(user_id, deal_embeddings, deal_data, user_profil
     user_profile = user_profiles[user_profiles['FK_BusinessUserId'] == user_id]
     spender_category = user_profiles.loc[user_profiles['FK_BusinessUserId'] == user_id, 'spender_category'].values[0]
     print(f"Spender Category {spender_category}")
-
+    
     #calculating mcc_scores
     mcc_scores = calculate_user_interest_score(user_id)
 
